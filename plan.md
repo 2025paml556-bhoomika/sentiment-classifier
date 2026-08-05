@@ -15,8 +15,7 @@ mandatory. The assignment is not evaluated at all without the video.
 | 4 | M5 | Monitoring, drift, retraining | Not started |
 
 Week 1 code lives in `src/` and was verified end to end on 5 Aug 2026 via
-`src/pipeline.py`, taking about 23 seconds on the full 568k-row dataset. The two
-remaining Week 1 tasks are DVC versioning and the written validation report.
+`src/pipeline.py`, taking about 23 seconds on the full 568k-row dataset.
 
 Reproduce the run with:
 
@@ -33,7 +32,7 @@ Reproduce the run with:
 - [x] **1.5 Text cleaning, two versions.** `heavy_clean()` removes stopwords for TF-IDF; `light_clean()` keeps sentence structure for DistilBERT.
 - [x] **1.6 Feature pipeline A.** `build_tfidf_features()` fits or reuses a TF-IDF vectorizer. Accepts an existing vectorizer so Week 4 retraining reuses the same vocabulary.
 - [x] **1.7 Feature pipeline B.** `build_bert_tokenized_features()` returns `input_ids` and `attention_mask` for DistilBERT.
-- [ ] **1.8 Dataset versioning.** DVC 3.67.1 is installed in `venv/`, but the repo has no `.dvc` directory, so it was never initialized. Needs `dvc init`, then `dvc add` on the raw and cleaned datasets.
+- [ ] **1.8 Dataset versioning.** DVC 3.67.1 is installed in `venv/`, but the repo has no `.dvc` directory, so it was never initialized. Needs `dvc init`, then `dvc add` on the raw and cleaned datasets. Do this before Week 2 work piles up: it gates the GitHub repository artifact, and that artifact is graded on commit history showing weekly progress, so a late bulk commit reads badly.
 - [x] **1.9 Repo setup.** Git repo initialized with `src/`, `data/raw/`, `data/processed/`. `.gitignore` excludes CSVs, pickles, `venv/`, and `mlruns/`.
 - [ ] **1.10 Validation report.** The pipeline writes `data/processed/validation_report.json`, but the human-readable write-up does not exist yet. The numbers from a verified full run on 5 Aug 2026:
 
@@ -51,7 +50,8 @@ Reproduce the run with:
 
 ## Week 2 (M3) — Model training & experiment tracking
 
-- [ ] **2.1 Baseline model.** Logistic Regression (or SVM) on the TF-IDF features from 1.6.
+- [ ] **2.0 Handle class imbalance.** Not in the source document, but the data forces it. The cleaned set is roughly 84% positive, a 5.4-to-1 split. A model that always predicts Positive scores about 84% accuracy while being useless. Decide on class weights, resampling, or both, and report macro F1 rather than accuracy.
+- [ ] **2.1 Baseline model.** Logistic Regression (or SVM) on the TF-IDF features from 1.6. Use `class_weight="balanced"` given 2.0.
 - [ ] **2.2 Advanced model.** Fine-tune DistilBERT on light-cleaned text. GPU via Colab or local.
 - [ ] **2.3 Experiment tracking.** Log both runs to MLflow: parameters, metrics, artifacts, code version.
 - [ ] **2.4 Model comparison.** Compare accuracy, F1, and precision-recall side by side. Document why the winner wins.
@@ -72,7 +72,7 @@ Reproduce the run with:
 - [ ] **4.3 Monitoring setup.** Define signals such as rolling confidence average and prediction distribution.
 - [ ] **4.4 Retraining trigger design.** Write the rule down, for example "retrain if confidence < X for Y% of predictions".
 - [ ] **4.5 Architecture diagram.** Finalize the pipeline diagram for the report.
-- [ ] **4.6 Video script and recording.** Narrated walkthrough, max 10 minutes.
+- [ ] **4.6 Video script and recording.** Script and record the walkthrough to the full spec in artifact 3 below, which lists every stage the narration must cover.
 
 ## Final submission — 3 required artifacts
 
@@ -82,15 +82,16 @@ Reproduce the run with:
 
 ## Open items to resolve
 
-- **DVC is the main Week 1 blocker.** It gates artifact 1, and the plan asks for
-  commit history showing weekly progress, so setting it up late looks worse.
 - **Filename case mismatch.** The dataset is `data/raw/Reviews.csv`, but the
   `__main__` test blocks in all four modules use `data/raw/reviews.csv`. macOS
   ignores case, so those self-tests pass locally and would fail on Linux,
   including Docker in Week 3. `pipeline.py` is unaffected, since it takes the path
   as an argument.
-- **No pinned environment.** `requirements.txt` uses open `>=` ranges and there is
-  a `venv/` directory. Reproducibility is graded in 2.5, so pin exact versions.
+- **No pinned environment.** `requirements.txt` uses open `>=` ranges, and the
+  installed versions have already drifted far past them. `transformers` resolved to
+  5.14.1 against a `>=4.35` floor, a major version jump, and `torch` to 2.13 against
+  `>=2.0`. The DistilBERT code still imports fine today, but task 2.5 grades whether
+  a teammate can reproduce your run, so pin exact versions now.
 - **`src/pipeline.py` uses argparse**, against project convention. Worth replacing
   with a plain config or environment variables before the tree grows.
 - **Task owners are unassigned.** The source document has a "Suggested owner" blank
