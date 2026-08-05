@@ -9,7 +9,7 @@ mandatory. The assignment is not evaluated at all without the video.
 
 | Week | Milestone | Focus | State |
 |---|---|---|---|
-| 1 | M2 | Data ingestion, validation, features | 8 of 10 tasks done |
+| 1 | M2 | Data ingestion, validation, features | 9 of 10 tasks done |
 | 2 | M3 | Model training, experiment tracking | Not started |
 | 3 | M4 | Packaging, deployment | Not started |
 | 4 | M5 | Monitoring, drift, retraining | Not started |
@@ -32,7 +32,7 @@ Reproduce the run with:
 - [x] **1.5 Text cleaning, two versions.** `heavy_clean()` removes stopwords for TF-IDF; `light_clean()` keeps sentence structure for DistilBERT.
 - [x] **1.6 Feature pipeline A.** `build_tfidf_features()` fits or reuses a TF-IDF vectorizer. Accepts an existing vectorizer so Week 4 retraining reuses the same vocabulary.
 - [x] **1.7 Feature pipeline B.** `build_bert_tokenized_features()` returns `input_ids` and `attention_mask` for DistilBERT.
-- [ ] **1.8 Dataset versioning.** DVC 3.67.1 is installed in `venv/`, but the repo has no `.dvc` directory, so it was never initialized. Needs `dvc init`, then `dvc add` on the raw and cleaned datasets. Do this before Week 2 work piles up: it gates the GitHub repository artifact, and that artifact is graded on commit history showing weekly progress, so a late bulk commit reads badly.
+- [x] **1.8 Dataset versioning.** DVC 3.67.1 initialized on 5 Aug 2026. Both datasets are tracked: `data/raw/Reviews.csv` (301 MB) and `data/processed/cleaned_reviews.csv` (422 MB). Git holds only the two `.dvc` pointer files, which carry an md5 and a byte size. The data itself lives in `.dvc/cache` (690 MB) and is ignored by git. The `.gitignore` entries for those two CSVs were removed, because DVC refuses to track files git already ignores; DVC then wrote its own ignore rules into `data/raw/` and `data/processed/`.
 - [x] **1.9 Repo setup.** Git repo initialized with `src/`, `data/raw/`, `data/processed/`. `.gitignore` excludes CSVs, pickles, `venv/`, and `mlruns/`.
 - [ ] **1.10 Validation report.** The pipeline writes `data/processed/validation_report.json`, but the human-readable write-up does not exist yet. The numbers from a verified full run on 5 Aug 2026:
 
@@ -43,8 +43,9 @@ Reproduce the run with:
 | Duplicate review texts | 174,875 |
 | Invalid rating values | 0 |
 | Neutral (3-star) rows dropped | 42,640 |
-| Positive / Negative | 443,777 / 82,037 |
+| Positive / Negative, before cleaning | 443,777 / 82,037 |
 | Rows after cleaning | 363,825 |
+| Positive / Negative, after cleaning | 306,758 / 57,067 |
 | Review length, words (min/mean/max) | 3 / 80.3 / 3,432 |
 | TF-IDF matrix | 363,825 x 5,000 |
 

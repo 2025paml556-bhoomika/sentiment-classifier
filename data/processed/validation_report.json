@@ -1,0 +1,18 @@
+{
+  "total_rows": 568454,
+  "null_text_rows": 0,
+  "null_rating_rows": 0,
+  "duplicate_rows": 174875,
+  "empty_text_rows": 0,
+  "invalid_rating_values": 0,
+  "class_balance": {
+    "positive": 443777,
+    "negative": 82037,
+    "neutral_dropped": 42640
+  },
+  "review_length_stats": {
+    "min": 3,
+    "max": 3432,
+    "mean": 80.3
+  }
+}
