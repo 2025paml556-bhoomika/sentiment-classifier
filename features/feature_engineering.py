@@ -81,11 +81,12 @@ def build_bert_tokenized_features(texts: pd.Series, model_name: str = "distilber
 
 if __name__ == "__main__":
     import sys
-    sys.path.append(".")
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent / "validation"))
     from ingestion import ingest_raw_data
     from cleaning import clean_and_label
 
-    df = ingest_raw_data("data/raw/reviews.csv", text_col="Text", rating_col="Score")
+    df = ingest_raw_data("data/raw/Reviews.csv", text_col="Text", rating_col="Score")
     cleaned = clean_and_label(df)
 
     tfidf_matrix, vectorizer = build_tfidf_features(cleaned["text_heavy_clean"])

@@ -90,7 +90,11 @@ def clean_and_label(df: pd.DataFrame) -> pd.DataFrame:
 
 
 if __name__ == "__main__":
+    import sys
+    from pathlib import Path
+    sys.path.insert(0, str(Path(__file__).parent.parent / "validation"))
     from ingestion import ingest_raw_data
-    df = ingest_raw_data("data/raw/reviews.csv", text_col="Text", rating_col="Score")
+
+    df = ingest_raw_data("data/raw/Reviews.csv", text_col="Text", rating_col="Score")
     cleaned = clean_and_label(df)
     print(cleaned.head())

@@ -3,4 +3,5 @@ __pycache__/
 *.pyc
 data/processed/*.pkl
 mlruns/
+mlflow.db
 .DS_Store

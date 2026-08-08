@@ -16,12 +16,17 @@ means for the grading rubric.
 import argparse
 import json
 import logging
+import sys
 from pathlib import Path
 
-from ingestion import ingest_raw_data
-from validation import validate_data, DataValidationError
-from cleaning import clean_and_label
-from feature_engineering import build_tfidf_features, save_tfidf_vectorizer
+# The pipeline stages live in their own folders, so make them importable.
+ROOT = Path(__file__).parent
+sys.path[:0] = [str(ROOT / "validation"), str(ROOT / "features")]
+
+from ingestion import ingest_raw_data  # noqa: E402
+from validate_data import validate_data, DataValidationError  # noqa: E402
+from cleaning import clean_and_label  # noqa: E402
+from feature_engineering import build_tfidf_features, save_tfidf_vectorizer  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)

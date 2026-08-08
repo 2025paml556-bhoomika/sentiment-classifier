@@ -82,5 +82,5 @@ def validate_data(df: pd.DataFrame, min_rows: int = 100) -> dict:
 
 if __name__ == "__main__":
     from ingestion import ingest_raw_data
-    df = ingest_raw_data("data/raw/reviews.csv", text_col="Text", rating_col="Score")
+    df = ingest_raw_data("data/raw/Reviews.csv", text_col="Text", rating_col="Score")
     validate_data(df)

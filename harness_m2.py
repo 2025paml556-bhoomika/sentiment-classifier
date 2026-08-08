@@ -21,10 +21,14 @@ import logging
 import sys
 from pathlib import Path
 
-from ingestion import ingest_raw_data
-from validation import validate_data
-from cleaning import clean_and_label
-from feature_engineering import build_tfidf_features, build_bert_tokenized_features
+# The pipeline stages live in their own folders, so make them importable.
+ROOT = Path(__file__).parent
+sys.path[:0] = [str(ROOT / "validation"), str(ROOT / "features")]
+
+from ingestion import ingest_raw_data  # noqa: E402
+from validate_data import validate_data  # noqa: E402
+from cleaning import clean_and_label  # noqa: E402
+from feature_engineering import build_tfidf_features, build_bert_tokenized_features  # noqa: E402
 
 RAW_CSV = "data/raw/Reviews.csv"
 TEXT_COL = "Text"
