@@ -12,7 +12,7 @@ Saves two things to MLflow:
     features from training
 
 Run from the repo root:
-    ./venv/bin/python src/train_from_store.py
+    ./venv/bin/python training/train_model_from_store.py
 """
 
 import json

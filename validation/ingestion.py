@@ -52,5 +52,5 @@ def ingest_raw_data(filepath: str, text_col: str, rating_col: str) -> pd.DataFra
 
 if __name__ == "__main__":
     # Quick manual test
-    df = ingest_raw_data("data/raw/reviews.csv", text_col="Text", rating_col="Score")
+    df = ingest_raw_data("data/raw/Reviews.csv", text_col="Text", rating_col="Score")
     print(df.head())

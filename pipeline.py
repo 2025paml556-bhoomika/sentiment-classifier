@@ -6,7 +6,7 @@ Runs the full data pipeline end to end:
     ingest -> validate -> clean & label -> feature engineer -> save outputs
 
 Run it with:
-    python src/pipeline.py --input data/raw/reviews.csv --text-col Text --rating-col Score
+    python pipeline.py --input data/raw/Reviews.csv --text-col Text --rating-col Score
 
 This is the single entry point your team (and the evaluator) can run
 to reproduce Week 1 from scratch — which is exactly what "reproducibility"

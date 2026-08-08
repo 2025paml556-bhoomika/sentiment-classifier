@@ -1,0 +1,6 @@
+outs:
+- md5: 71d88c04cb21ccdc2bd66ce7b84d01b8.dir
+  size: 268545202
+  nfiles: 4
+  hash: md5
+  path: distilbert-20k

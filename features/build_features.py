@@ -20,7 +20,7 @@ rows would leak test-set information into the features. The store keeps
 every row, with a `split` column saying which is which.
 
 Run from the repo root:
-    ./venv/bin/python src/build_feature_store.py
+    ./venv/bin/python features/build_features.py
 """
 
 import json

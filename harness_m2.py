@@ -1,19 +1,19 @@
 """
 M2 Harness — step through the Week 1 pipeline, one stage at a time
 --------------------------------------------------------------------
-Calls the same functions as src/pipeline.py, but prints the INPUT and
+Calls the same functions as pipeline.py, but prints the INPUT and
 the OUTPUT of every stage and pauses in between, so you can read what
 each step produced before moving on.
 
 Run from the repo root:
-    ./venv/bin/python src/harness_m2.py
+    ./venv/bin/python harness_m2.py
 
 Press Enter to advance, Ctrl-C to stop and keep whatever is on screen.
 Pauses are skipped when stdin is not a terminal, so piping to a file
 or a log still works.
 
 This harness only inspects. It does not write to data/processed —
-run src/pipeline.py for that.
+run pipeline.py for that.
 """
 
 import json
@@ -145,7 +145,7 @@ def main():
     print("  M2 COMPLETE — nothing written to disk")
     print("=" * 72)
     print("\n  To produce the real artifacts, run:")
-    print(f"    ./venv/bin/python src/pipeline.py --input {RAW_CSV} "
+    print(f"    ./venv/bin/python pipeline.py --input {RAW_CSV} "
           f"--text-col {TEXT_COL} --rating-col {RATING_COL}\n")
 
 
