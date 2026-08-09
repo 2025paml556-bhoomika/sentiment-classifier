@@ -10,10 +10,11 @@ as neutral.
 
 | | |
 |---|---|
-| Best model | Logistic Regression on bigram TF-IDF |
-| Macro F1 | 0.8729 |
-| Accuracy | 0.9249 |
-| Pipeline runtime | about 23 seconds on all 568k rows |
+| Best model | DistilBERT, fine-tuned |
+| Macro F1 | 0.8917 |
+| Accuracy | 0.9457 |
+| Data pipeline runtime | about 23 seconds on all 568k rows |
+| Fine-tune runtime | about 15 minutes on an Apple M3 GPU |
 
 ## Architecture
 
@@ -33,16 +34,19 @@ flowchart TD
 
     HEAVY --> STORE["features/build_features.py<br/>TF-IDF 20k bigrams to SVD 300 dims<br/>fitted on train split only"]
     HEAVY --> BASE["training/training.py<br/>TF-IDF direct, 5k and 20k"]
-    LIGHT --> BERT["DistilBERT tokenizer<br/>fine-tuning not done yet"]
+    LIGHT --> BERT["training/train_distilbert.py<br/>fine-tune on the Apple GPU"]
 
     STORE --> FS[("feature_store/<br/>features.parquet 581 MB<br/>transformer.pkl 47 MB<br/>schema.json")]
 
     FS --> TRAIN2["training/train_model_from_store.py"]
     BASE --> MLF[("MLflow<br/>mlflow.db<br/>params, metrics, models")]
     TRAIN2 --> MLF
+    BERT --> MLF
+    FS -.->|test split reused, so runs compare| BERT
 
-    MLF --> SERVE["serving/ REST API<br/>not built yet"]
-    FS -.->|same transformer, no skew| SERVE
+    BERT --> MS[("model_store/distilbert-20k<br/>256 MB, DVC-tracked")]
+    MS --> SERVE["serving/api.py<br/>FastAPI on CPU<br/>POST /predict"]
+    LIGHT -.->|same light_clean at serving| SERVE
 ```
 
 Two feature paths exist on purpose. `training/training.py` uses TF-IDF directly and
@@ -124,11 +128,52 @@ so anything served carries its own feature logic.
 venv/bin/python training/train_model_from_store.py
 ```
 
+**Fine-tune DistilBERT.** Uses the Apple GPU through MPS, about 15 minutes for one
+epoch on a 20,000-row sample. Saves weights to `model_store/distilbert-20k`.
+
+```bash
+venv/bin/python training/train_distilbert.py
+```
+
 **View the experiments.**
 
 ```bash
 venv/bin/mlflow ui --backend-store-uri sqlite:///mlflow.db
 ```
+
+## Serving the model
+
+`serving/api.py` serves the fine-tuned DistilBERT model. Start it with:
+
+```bash
+venv/bin/uvicorn serving.api:app --port 8000
+```
+
+Ask for a prediction:
+
+```bash
+curl -X POST localhost:8000/predict \
+     -H 'Content-Type: application/json' \
+     -d '{"text": "Arrived stale and tasted awful. Waste of money."}'
+```
+
+```json
+{"label": "negative", "confidence": 0.9888,
+ "cleaned_text": "Arrived stale and tasted awful. Waste of money."}
+```
+
+`GET /health` reports which model is loaded. Interactive docs are at
+`http://localhost:8000/docs`.
+
+Two deliberate choices. The API runs the model on **CPU rather than the Apple GPU**,
+because the Docker image cannot use MPS, and matching devices keeps local and container
+behaviour identical. It also applies **`light_clean()` before tokenizing**, the same
+function used in training, so serving cannot shape the text differently from training.
+
+Rejected with HTTP 422: empty text, whitespace only, punctuation or emoji only, HTML
+only, non-string types, a missing or misnamed field, and anything over 5,000 characters.
+Input must hold at least one letter or digit, since `light_clean` keeps punctuation and
+`"!!!???"` would otherwise reach the model and come back as a confident-looking guess.
 
 ## Results
 
@@ -146,13 +191,26 @@ Re-running the pipeline produces a byte-identical `cleaned_reviews.csv`
 
 ### Models
 
-All use `class_weight="balanced"`. Metrics are on a held-out 20% stratified test split.
+Every run is scored on the same 72,765 test rows, taken from the feature store's `split`
+column, so these numbers compare models and not splits.
 
-| Run | Features | Accuracy | Macro F1 | ROC AUC |
-|---|---|---|---|---|
-| `logreg-tfidf-bigram` | TF-IDF 20k, unigram + bigram | 0.9249 | **0.8729** | 0.9750 |
-| `logreg-tfidf-unigram` | TF-IDF 5k, unigram only | 0.8977 | 0.8347 | 0.9608 |
-| `logreg-feature-store-svd300` | TF-IDF 20k, then SVD to 300 | 0.8615 | 0.7878 | 0.9387 |
+| Run | Features | Accuracy | Macro F1 | ROC AUC | Neg. prec. | Neg. recall | Train rows |
+|---|---|---|---|---|---|---|---|
+| `distilbert-20k` | tokenized text | **0.9457** | **0.8917** | **0.9762** | **0.875** | 0.763 | 20,000 |
+| `logreg-tfidf-bigram` | TF-IDF 20k, unigram + bigram | 0.9249 | 0.8729 | 0.9750 | 0.701 | **0.909** | 291,060 |
+| `logreg-tfidf-unigram` | TF-IDF 5k, unigram only | 0.8977 | 0.8347 | 0.9608 | 0.621 | 0.893 | 291,060 |
+| `logreg-feature-store-svd300` | TF-IDF 20k, then SVD to 300 | 0.8615 | 0.7878 | 0.9387 | 0.536 | 0.868 | 291,060 |
+
+DistilBERT wins on every aggregate score while training on 14 times less data. The three
+Logistic Regression runs use `class_weight="balanced"`; DistilBERT does not, which is the
+likely reason its negative recall trails.
+
+**The last two columns matter more than the winner.** The two leading models fail in
+opposite directions. DistilBERT is the careful one: when it calls a review negative it is
+right 87.5% of the time, against 70.1% for the baseline. But it catches fewer negatives,
+76.3% against 90.9%. For support tickets, missing an unhappy customer usually costs more
+than a false alarm a human can wave away, so the baseline may be the better product choice
+despite the lower Macro F1. Weighting DistilBERT's loss is the obvious next experiment.
 
 The bigram run beats the unigram run by 0.038 Macro F1. Two things differ between them,
 so the credit is shared: bigrams add word pairs, and the vocabulary grows from 5,000 to
@@ -213,10 +271,12 @@ useful there.
 ## Known gaps
 
 - No DVC remote, so `dvc pull` fails from a fresh clone.
-- DistilBERT is tokenized but not fine-tuned. Needs a GPU decision.
-- `serving/`, `ui/`, and `model_store/` are still empty.
-- `requirements.txt` uses open `>=` ranges and installed versions have drifted well
-  past them, so pin exact versions before claiming reproducibility.
+- DistilBERT trains without class weighting, unlike the other models, so its negative
+  recall is weaker than it needs to be.
+- It also ran one epoch on a 20,000-row sample, so the comparison against the
+  full-data baselines is not perfectly controlled.
+- No Dockerfile yet, and `ui/` is still empty.
+- Only DistilBERT is exported to `model_store/`. The sklearn models live only in MLflow.
 - Stage 4 of `pipeline.py` fits TF-IDF on all rows with no split, so
   `tfidf_vectorizer.pkl` has seen the test set. Nothing trains from it, but it overlaps
   the feature store and should probably be removed.

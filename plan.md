@@ -11,7 +11,7 @@ mandatory. The assignment is not evaluated at all without the video.
 |---|---|---|---|
 | 1 | M2 | Data ingestion, validation, features | 10 of 10 tasks done |
 | 2 | M3 | Model training, experiment tracking | 4 of 6 tasks done |
-| 3 | M4 | Packaging, deployment | Not started |
+| 3 | M4 | Packaging, deployment | 2 of 5 tasks done |
 | 4 | M5 | Monitoring, drift, retraining | Not started |
 | — | added | Feature store (professor's request) | Built and versioned |
 
@@ -126,10 +126,10 @@ so the baseline may still be the better product choice despite the lower macro F
 
 ## Week 3 (M4) — Packaging & deployment
 
-- [ ] **3.1 Model serialization.** Pickle for sklearn, saved weights for DistilBERT. `model_store/` is empty.
-- [ ] **3.2 REST API.** FastAPI endpoint taking text, returning predicted label plus confidence. `serving/` is empty.
-- [ ] **3.3 Input validation.** Handle empty strings, non-text input, and oversized text gracefully.
-- [ ] **3.4 Containerize.** Write a Dockerfile, then build and test the image locally.
+- [ ] **3.1 Model serialization.** Half done. DistilBERT weights are saved to `model_store/distilbert-20k` and DVC-tracked. The sklearn models still live only inside MLflow, so export the chosen one if it is ever served.
+- [x] **3.2 REST API.** `serving/api.py`, FastAPI. `POST /predict` takes text and returns label, confidence, and the cleaned text. `GET /health` reports the loaded model. Serves DistilBERT on CPU, not MPS, because the Docker image in 3.4 has no Apple GPU, and matching devices keeps local and container behaviour identical. Input is passed through `light_clean()` first, the same function used in training.
+- [x] **3.3 Input validation.** Verified against 10 cases. Rejected with HTTP 422: empty string, whitespace only, punctuation only, emoji only, HTML only, non-string types, null, missing field, wrong field name, and text over 5,000 characters. The punctuation-only case needed a real fix, since `light_clean` keeps punctuation, so `!!!???` first slipped through and returned a meaningless "positive" at 0.63 confidence. The check now requires at least one letter or digit.
+- [ ] **3.4 Containerize.** Write a Dockerfile, then build and test the image locally. Note the image must `dvc pull` the weights, or copy them in.
 - [ ] **3.5 API testing.** Postman collection or curl commands with sample requests and responses.
 
 ## Week 4 (M5) — Monitoring, drift & retraining
@@ -163,13 +163,10 @@ so the baseline may still be the better product choice despite the lower macro F
   with identical metrics. Delete two before presenting the comparison.
 - **No DVC remote.** Nothing is configured, so evaluators cannot run `dvc pull`. The
   cache is local only. Artifact 1 expects the dataset to be reachable.
-- **No pinned environment, and one missing package.** `requirements.txt` uses open
-  `>=` ranges and every installed version has drifted well past its floor:
-  `transformers` 5.14.1 against `>=4.35` and `mlflow` 3.15.1 against `>=2.9` are both
-  major-version jumps. Worse, `pyarrow` (25.0.0 locally) is absent from the file, yet
-  `build_features.py` needs it to write Parquet, so a fresh install cannot build the
-  feature store. Pin exact versions and add `pyarrow`. Task 2.5 grades exactly this.
-  Current environment: Python 3.13.9, pandas 2.3.3, scikit-learn 1.9.0, torch 2.13.0.
+- **Environment now pinned.** `requirements.txt` holds exact `==` versions, and the
+  missing `pyarrow` was added, without which a fresh install cannot write the feature
+  store's Parquet file. Built on Python 3.13.9. What remains for task 2.5 is a teammate
+  actually reproducing a run from the logged config.
 - **`pipeline.py` uses argparse**, against project convention. Worth replacing with a
   plain config before the tree grows.
 - **Stage 4 of `pipeline.py` overlaps the feature store, and it leaks.** It fits TF-IDF
