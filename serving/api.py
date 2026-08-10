@@ -21,8 +21,11 @@ Then try it:
          -d '{"text": "arrived stale and tasted awful"}'
 """
 
+import json
 import re
 import sys
+import time
+from datetime import datetime, timezone
 from pathlib import Path
 
 import torch
@@ -36,6 +39,7 @@ sys.path.insert(0, str(ROOT / "features"))
 from cleaning import light_clean  # noqa: E402
 
 MODEL_DIR = ROOT / "model_store" / "distilbert-20k"
+LOG_PATH = ROOT / "logs" / "predictions.jsonl"
 MAX_LENGTH = 128
 MAX_CHARS = 5000
 LABELS = {0: "negative", 1: "positive"}
@@ -66,6 +70,22 @@ class Prediction(BaseModel):
     cleaned_text: str
 
 
+def log_prediction(text, label, confidence, word_count, latency_ms):
+    """Append one prediction as a line of JSON, for the Week 4 drift work."""
+    LOG_PATH.parent.mkdir(parents=True, exist_ok=True)
+    entry = {
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "model": MODEL_DIR.name,
+        "text": text,
+        "label": label,
+        "confidence": confidence,
+        "word_count": word_count,
+        "latency_ms": latency_ms,
+    }
+    with open(LOG_PATH, "a") as f:
+        f.write(json.dumps(entry) + "\n")
+
+
 @app.get("/health")
 def health():
     return {"status": "ok", "model": MODEL_DIR.name}
@@ -73,6 +93,7 @@ def health():
 
 @app.post("/predict", response_model=Prediction)
 def predict(request: ReviewRequest):
+    started = time.perf_counter()
     cleaned = light_clean(request.text)
     batch = tokenizer(cleaned, truncation=True, max_length=MAX_LENGTH,
                       return_tensors="pt")
@@ -81,6 +102,11 @@ def predict(request: ReviewRequest):
         probs = torch.softmax(model(**batch).logits, dim=-1)[0]
 
     index = int(probs.argmax())
-    return Prediction(label=LABELS[index],
-                      confidence=round(float(probs[index]), 4),
-                      cleaned_text=cleaned)
+    label = LABELS[index]
+    confidence = round(float(probs[index]), 4)
+
+    log_prediction(text=request.text, label=label, confidence=confidence,
+                   word_count=len(cleaned.split()),
+                   latency_ms=round((time.perf_counter() - started) * 1000, 1))
+
+    return Prediction(label=label, confidence=confidence, cleaned_text=cleaned)

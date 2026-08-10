@@ -12,7 +12,7 @@ mandatory. The assignment is not evaluated at all without the video.
 | 1 | M2 | Data ingestion, validation, features | 10 of 10 tasks done |
 | 2 | M3 | Model training, experiment tracking | 4 of 6 tasks done |
 | 3 | M4 | Packaging, deployment | 2 of 5 tasks done |
-| 4 | M5 | Monitoring, drift, retraining | Not started |
+| 4 | M5 | Monitoring, drift, retraining | 1 of 6 tasks done |
 | — | added | Feature store (professor's request) | Built and versioned |
 
 Verified end to end on 8 Aug 2026. The pipeline takes about 23 seconds on the full
@@ -134,7 +134,7 @@ so the baseline may still be the better product choice despite the lower macro F
 
 ## Week 4 (M5) — Monitoring, drift & retraining
 
-- [ ] **4.1 Prediction logging.** Log input, output, confidence, and timestamp for every prediction.
+- [x] **4.1 Prediction logging.** `serving/api.py` appends one line of JSON per prediction to `logs/predictions.jsonl`. Each line holds the UTC timestamp, model name, input text, label, confidence, word count, and latency in milliseconds. Word count and latency exist for the 4.3 monitoring signals. Rejected requests write nothing, since no prediction happened. `logs/` is git-ignored, because the file grows without limit and holds user text.
 - [ ] **4.2 Drift simulation.** Feed text with unseen slang and topics, then observe the accuracy drop.
 - [ ] **4.3 Monitoring setup.** Define signals such as rolling confidence average and prediction distribution.
 - [ ] **4.4 Retraining trigger design.** Write the rule down, for example "retrain if confidence < X for Y% of predictions".

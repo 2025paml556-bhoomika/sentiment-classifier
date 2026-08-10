@@ -4,4 +4,5 @@ __pycache__/
 data/processed/*.pkl
 mlruns/
 mlflow.db
+logs/
 .DS_Store
