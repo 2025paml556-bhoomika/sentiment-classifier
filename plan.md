@@ -12,7 +12,7 @@ mandatory. The assignment is not evaluated at all without the video.
 | 1 | M2 | Data ingestion, validation, features | 10 of 10 tasks done |
 | 2 | M3 | Model training, experiment tracking | 4 of 6 tasks done |
 | 3 | M4 | Packaging, deployment | 2 of 5 tasks done |
-| 4 | M5 | Monitoring, drift, retraining | 1 of 6 tasks done |
+| 4 | M5 | Monitoring, drift, retraining | 2 of 6 tasks done |
 | — | added | Feature store (professor's request) | Built and versioned |
 
 Verified end to end on 8 Aug 2026. The pipeline takes about 23 seconds on the full
@@ -135,7 +135,7 @@ so the baseline may still be the better product choice despite the lower macro F
 ## Week 4 (M5) — Monitoring, drift & retraining
 
 - [x] **4.1 Prediction logging.** `serving/api.py` appends one line of JSON per prediction to `logs/predictions.jsonl`. Each line holds the UTC timestamp, model name, input text, label, confidence, word count, and latency in milliseconds. Word count and latency exist for the 4.3 monitoring signals. Rejected requests write nothing, since no prediction happened. `logs/` is git-ignored, because the file grows without limit and holds user text.
-- [ ] **4.2 Drift simulation.** Feed text with unseen slang and topics, then observe the accuracy drop.
+- [x] **4.2 Drift simulation.** `monitoring/drift_simulation.py` sends 200 real test reviews and 30 hand-written drifted ones through the live API, both batches labelled, so the accuracy drop is measured rather than assumed. Accuracy fell 0.925 to 0.867. Confidence fell further, 0.948 to 0.816, and the share below 0.8 confidence quadrupled from 10% to 40%. New slang hurt about twice as much as a new topic, because DistilBERT's pretraining already covers plain English. Every failure carried low confidence, which is what makes a confidence-based trigger viable in 4.4. Written up in `reports/drift_report.md`.
 - [ ] **4.3 Monitoring setup.** Define signals such as rolling confidence average and prediction distribution.
 - [ ] **4.4 Retraining trigger design.** Write the rule down, for example "retrain if confidence < X for Y% of predictions".
 - [ ] **4.5 Architecture diagram.** Finalize the pipeline diagram for the report.
