@@ -1,0 +1,15 @@
+# Only what the API imports. The root requirements.txt also carries mlflow,
+# dvc, scikit-learn and pyarrow, which serving never touches.
+#
+# pandas is here only because features/cleaning.py imports it at module level.
+# light_clean() itself does not use it.
+#
+# This file targets the Linux container, not macOS. The +cpu build of torch
+# exists only on the PyTorch index; PyPI's Linux wheel is 427 MB because it
+# bundles CUDA. Naming +cpu explicitly stops pip choosing that one.
+
+fastapi==0.141.1
+uvicorn==0.52.1
+torch==2.13.0+cpu
+transformers==5.14.1
+pandas==2.3.3

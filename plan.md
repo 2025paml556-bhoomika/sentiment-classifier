@@ -10,8 +10,8 @@ mandatory. The assignment is not evaluated at all without the video.
 | Week | Milestone | Focus | State |
 |---|---|---|---|
 | 1 | M2 | Data ingestion, validation, features | 10 of 10 tasks done |
-| 2 | M3 | Model training, experiment tracking | 4 of 6 tasks done |
-| 3 | M4 | Packaging, deployment | 2 of 5 tasks done |
+| 2 | M3 | Model training, experiment tracking | 5 of 6 tasks done |
+| 3 | M4 | Packaging, deployment | 4 of 5 tasks done |
 | 4 | M5 | Monitoring, drift, retraining | 4 of 6 tasks done |
 | — | added | Feature store (professor's request) | Built and versioned |
 
@@ -121,7 +121,7 @@ so the baseline may still be the better product choice despite the lower macro F
 - [x] **2.1 Baseline model.** Logistic Regression on TF-IDF, in unigram (5k) and bigram (20k) variants, via `training/training.py`. The bigram run wins by 0.038 macro F1, though both bigrams and the larger vocabulary contribute, so the credit is shared.
 - [x] **2.2 Advanced model.** DistilBERT fine-tuned via `training/train_distilbert.py`, on the Apple GPU through MPS. No Colab needed. One epoch, 20,000-row stratified subsample, batch 16, `max_length` 128, about 15 minutes. Loss fell from 0.38 to 0.15. Weights are in `model_store/distilbert-20k`, DVC-tracked because `model.safetensors` is 256 MB and GitHub rejects anything over 100 MB.
 - [x] **2.3 Experiment tracking.** Parameters, metrics, and a classification report logged for every run. `train_model_from_store.py` also logs a combined transformer-plus-classifier pipeline, so a served sklearn model carries its own feature logic.
-- [ ] **2.4 Model comparison.** The numbers are above and the precision-versus-recall trade-off is understood. The written comparison for the report is still to draft.
+- [x] **2.4 Model comparison.** Written up in `reports/model_comparison.md`. All four models on the same 72,765 test rows, with accuracy, macro F1, ROC AUC, and negative-class precision, recall and F1. DistilBERT wins every aggregate score on fourteen times less training data, thanks to pretraining and reading word order. The report converts precision and recall into review counts, which is the useful part: DistilBERT misses 1,673 more real complaints than the bigram baseline, while the baseline raises 3,188 more false alarms. So the better model depends on the cost of each error, not on macro F1. Caveats are stated: unequal training data, one epoch, no class weighting on DistilBERT, and a single split.
 - [ ] **2.5 Reproducibility check.** A teammate must reproduce the winning run from the logged config alone. Blocked on pinning versions, see open items.
 
 ## Week 3 (M4) — Packaging & deployment
@@ -129,8 +129,13 @@ so the baseline may still be the better product choice despite the lower macro F
 - [ ] **3.1 Model serialization.** Half done. DistilBERT weights are saved to `model_store/distilbert-20k` and DVC-tracked. The sklearn models still live only inside MLflow, so export the chosen one if it is ever served.
 - [x] **3.2 REST API.** `serving/api.py`, FastAPI. `POST /predict` takes text and returns label, confidence, and the cleaned text. `GET /health` reports the loaded model. Serves DistilBERT on CPU, not MPS, because the Docker image in 3.4 has no Apple GPU, and matching devices keeps local and container behaviour identical. Input is passed through `light_clean()` first, the same function used in training.
 - [x] **3.3 Input validation.** Verified against 10 cases. Rejected with HTTP 422: empty string, whitespace only, punctuation only, emoji only, HTML only, non-string types, null, missing field, wrong field name, and text over 5,000 characters. The punctuation-only case needed a real fix, since `light_clean` keeps punctuation, so `!!!???` first slipped through and returned a meaningless "positive" at 0.63 confidence. The check now requires at least one letter or digit.
-- [ ] **3.4 Containerize.** Write a Dockerfile, then build and test the image locally. Note the image must `dvc pull` the weights, or copy them in.
-- [ ] **3.5 API testing.** Postman collection or curl commands with sample requests and responses.
+- [x] **3.4 Containerize.** Built and tested. Three files: `Dockerfile`, `serving/requirements.txt` (only the five packages the API imports, leaving out mlflow, dvc, scikit-learn and pyarrow), and `.dockerignore` (the repo is 6.2 GB, and Docker uploads the whole folder as build context unless told otherwise). Weights are copied in rather than pulled, as there is no DVC remote yet.
+  - Runtime is **Colima**, not Docker Desktop, installed with `brew install colima docker docker-buildx` and started as `colima start --cpu 4 --memory 4 --disk 30`. Memory is capped at 4 GB because this machine only has 8 GB.
+  - `torch` is pinned to `2.13.0+cpu`, not `2.13.0`. Both resolve on Linux arm64, but PyPI's wheel is 427 MB against 155 MB, because it bundles CUDA libraries a container cannot use. The original `--extra-index-url` left that to pip's version ordering, so the pin makes it deterministic. Confirmed: the build installed `torch-2.13.0+cpu`.
+  - Results: builds in about 95 seconds, image is 2.15 GB, health responds 4 seconds after start, and latency settles at 15 to 35 ms per request after a slower first call.
+  - Checked for skew: the container returns the same label and confidence as the host to four decimal places on three test reviews. All five bad inputs are still rejected with 422 inside the container.
+  - `docker run` needs `-v "$PWD/logs:/app/logs"`, or the prediction log dies with the container and Week 4 monitoring has nothing to read.
+- [x] **3.5 API testing.** `reports/api_testing.md` holds curl commands with the real captured responses: five successful predictions, ten rejected requests with their messages, three edge cases accepted on purpose, and measured latency. Every figure came from the running API, none are invented. Gaps are stated at the end: no load testing, no authentication, and only DistilBERT is exposed.
 
 ## Week 4 (M5) — Monitoring, drift & retraining
 

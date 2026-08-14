@@ -175,6 +175,27 @@ only, non-string types, a missing or misnamed field, and anything over 5,000 cha
 Input must hold at least one letter or digit, since `light_clean` keeps punctuation and
 `"!!!???"` would otherwise reach the model and come back as a confident-looking guess.
 
+### In a container
+
+The model weights are DVC-tracked, so make sure `model_store/distilbert-20k/` exists
+before building. The build copies the weights in rather than pulling them.
+
+```bash
+docker build -t sentiment-api .
+docker run -p 8000:8000 -v "$PWD/logs:/app/logs" sentiment-api
+```
+
+The volume mount matters. Without it, the prediction log lives inside the container and
+disappears when the container does, which breaks the Week 4 monitoring.
+
+The image is 2.15 GB, mostly torch and the 268 MB of weights. `serving/requirements.txt`
+holds only what the API imports, and pins `torch==2.13.0+cpu`; PyPI's default Linux wheel
+is 427 MB against 155 MB, because it bundles CUDA libraries a container cannot use.
+
+Verified in the container: health responds in about 4 seconds from a cold start,
+predictions match the host to four decimal places, and steady-state latency is 15 to 35 ms
+per request, with the first call slower while the model warms up.
+
 ## Results
 
 ### Data pipeline
@@ -275,7 +296,7 @@ useful there.
   recall is weaker than it needs to be.
 - It also ran one epoch on a 20,000-row sample, so the comparison against the
   full-data baselines is not perfectly controlled.
-- No Dockerfile yet, and `ui/` is still empty.
+- `ui/` is still empty.
 - Only DistilBERT is exported to `model_store/`. The sklearn models live only in MLflow.
 - Stage 4 of `pipeline.py` fits TF-IDF on all rows with no split, so
   `tfidf_vectorizer.pkl` has seen the test set. Nothing trains from it, but it overlaps

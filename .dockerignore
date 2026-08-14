@@ -1,0 +1,21 @@
+# The repo is about 6.2 GB. Docker uploads the whole folder as build context
+# unless it is told otherwise, so exclude everything the API does not need.
+
+venv/
+.git/
+.dvc/
+data/
+feature_store/
+mlruns/
+mlflow.db
+logs/
+reports/
+training/
+monitoring/
+validation/
+__pycache__/
+*/__pycache__/
+*.pyc
+*.docx
+*.ipynb
+.DS_Store

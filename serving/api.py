@@ -1,7 +1,9 @@
 """
 Week 3 (M4) — prediction API
 ------------------------------
-Serves the fine-tuned DistilBERT model, which won on macro F1.
+Serves distilbert-50k, which wins every overall score in
+reports/model_comparison.md. It replaced distilbert-20k, whose negative
+recall was 0.763 against 0.832 here.
 
 Runs on CPU, not MPS, because the Docker image in task 3.4 has no Apple
 GPU. Serving on CPU everywhere keeps local and container behaviour the same.
@@ -30,6 +32,7 @@ from pathlib import Path
 
 import torch
 from fastapi import FastAPI
+from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field, field_validator
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
@@ -38,8 +41,9 @@ sys.path.insert(0, str(ROOT / "features"))
 
 from cleaning import light_clean  # noqa: E402
 
-MODEL_DIR = ROOT / "model_store" / "distilbert-20k"
+MODEL_DIR = ROOT / "model_store" / "distilbert-50k"
 LOG_PATH = ROOT / "logs" / "predictions.jsonl"
+UI_PATH = ROOT / "ui" / "index.html"
 MAX_LENGTH = 128
 MAX_CHARS = 5000
 LABELS = {0: "negative", 1: "positive"}
@@ -84,6 +88,12 @@ def log_prediction(text, label, confidence, word_count, latency_ms):
     }
     with open(LOG_PATH, "a") as f:
         f.write(json.dumps(entry) + "\n")
+
+
+@app.get("/", include_in_schema=False)
+def ui():
+    """Serve the test page from the same origin, so it needs no CORS setup."""
+    return FileResponse(UI_PATH)
 
 
 @app.get("/health")
