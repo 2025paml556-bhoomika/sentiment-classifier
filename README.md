@@ -116,8 +116,8 @@ It prints the input and output of all five stages and pauses between them.
 venv/bin/python harness_m2.py
 ```
 
-**Run the real pipeline.** Writes `cleaned_reviews.csv`, `validation_report.json`,
-and `tfidf_vectorizer.pkl` into `data/processed/`.
+**Run the real pipeline.** Writes `cleaned_reviews.csv` and
+`validation_report.json` into `data/processed/`.
 
 ```bash
 venv/bin/python pipeline.py --input data/raw/Reviews.csv --text-col Text --rating-col Score
@@ -321,8 +321,5 @@ useful there.
   full-data baselines is not perfectly controlled.
 - `ui/` is still empty.
 - Only DistilBERT is exported to `model_store/`. The sklearn models live only in MLflow.
-- Stage 4 of `pipeline.py` fits TF-IDF on all rows with no split, so
-  `tfidf_vectorizer.pkl` has seen the test set. Nothing trains from it, but it overlaps
-  the feature store and should probably be removed.
 
 See `plan.md` for full task tracking.

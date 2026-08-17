@@ -104,8 +104,7 @@ that quality drift is visible without stopping a run.
 | File | Size | Contents |
 |---|---|---|
 | `data/processed/cleaned_reviews.csv` | 422 MB | 363,825 rows, 5 columns, DVC-tracked |
-| `data/processed/tfidf_vectorizer.pkl` | 182 KB | Fitted vectorizer: 5,000-term vocabulary and IDF weights |
 | `data/processed/validation_report.json` | 338 B | Machine-readable validation output |
 
-The TF-IDF feature matrix itself (363,825 x 5,000) is not saved. It rebuilds
-from the cleaned CSV in about 7 seconds, so storing it would waste space.
+TF-IDF features are not built here. They come later, from
+`tfidf/build_features.py`, which fits on the train split only.

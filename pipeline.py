@@ -3,7 +3,10 @@ Week 1 (M2) Pipeline Orchestrator
 ------------------------------------
 Runs the full data pipeline end to end:
 
-    ingest -> validate -> clean & label -> feature engineer -> save outputs
+    ingest -> validate -> clean & label -> save outputs
+
+Feature building is NOT done here. It lives in tfidf/build_features.py,
+which fits on the train split only (see data_pipeline/make_split.py).
 
 Run it with:
     python pipeline.py --input data/raw/Reviews.csv --text-col Text --rating-col Score
@@ -21,12 +24,11 @@ from pathlib import Path
 
 # The pipeline stages live in their own folders, so make them importable.
 ROOT = Path(__file__).parent
-sys.path[:0] = [str(ROOT / "data_pipeline"), str(ROOT / "tfidf")]
+sys.path[:0] = [str(ROOT / "data_pipeline")]
 
 from ingestion import ingest_raw_data  # noqa: E402
 from validate_data import validate_data, DataValidationError  # noqa: E402
 from cleaning import clean_and_label  # noqa: E402
-from feature_engineering import build_tfidf_features, save_tfidf_vectorizer  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
@@ -38,12 +40,12 @@ def run_pipeline(input_path: str, text_col: str, rating_col: str,
     output_dir.mkdir(parents=True, exist_ok=True)
 
     logger.info("=" * 60)
-    logger.info("STAGE 1/4 — INGESTION")
+    logger.info("STAGE 1/3 — INGESTION")
     logger.info("=" * 60)
     df_raw = ingest_raw_data(input_path, text_col=text_col, rating_col=rating_col)
 
     logger.info("=" * 60)
-    logger.info("STAGE 2/4 — VALIDATION")
+    logger.info("STAGE 2/3 — VALIDATION")
     logger.info("=" * 60)
     try:
         report = validate_data(df_raw)
@@ -56,7 +58,7 @@ def run_pipeline(input_path: str, text_col: str, rating_col: str,
     logger.info(f"Validation report saved to {output_dir / 'validation_report.json'}")
 
     logger.info("=" * 60)
-    logger.info("STAGE 3/4 — CLEANING & LABELING")
+    logger.info("STAGE 3/3 — CLEANING & LABELING")
     logger.info("=" * 60)
     df_clean = clean_and_label(df_raw)
 
@@ -65,22 +67,15 @@ def run_pipeline(input_path: str, text_col: str, rating_col: str,
     logger.info(f"Cleaned dataset saved to {cleaned_path} ({len(df_clean)} rows)")
 
     logger.info("=" * 60)
-    logger.info("STAGE 4/4 — FEATURE ENGINEERING (TF-IDF)")
-    logger.info("=" * 60)
-    tfidf_matrix, vectorizer = build_tfidf_features(df_clean["text_heavy_clean"])
-    save_tfidf_vectorizer(vectorizer, str(output_dir / "tfidf_vectorizer.pkl"))
-    logger.info(f"TF-IDF feature matrix shape: {tfidf_matrix.shape}")
-
-    logger.info("=" * 60)
     logger.info("PIPELINE COMPLETE")
     logger.info("=" * 60)
     logger.info(f"Outputs written to: {output_dir.resolve()}")
-    logger.info("Next: run 'dvc add data/processed/cleaned_reviews.csv' to version it.")
+    logger.info("Next: run 'dvc add data/processed/cleaned_reviews.csv' to version it,")
+    logger.info("then data_pipeline/make_split.py and tfidf/build_features.py for features.")
 
     return {
         "validation_report": report,
         "cleaned_rows": len(df_clean),
-        "tfidf_shape": tfidf_matrix.shape,
     }
 
 

@@ -33,8 +33,15 @@ logger = logging.getLogger(__name__)
 
 STORE_DIR = Path("feature_store")
 EXPERIMENT = "sentiment-classifier"
-RUN_NAME = "logreg-feature-store-svd300"
 SEED = 42
+
+# None trains on the full train split (the original logreg-feature-store-svd300
+# run). A number draws a stratified sample of that size, same seed and ratios
+# as comparison/train_controlled_50k.py, so runs stay comparable.
+TRAIN_SAMPLE = 50_000
+
+RUN_NAME = ("logreg-feature-store-svd300" if TRAIN_SAMPLE is None
+            else f"logreg-feature-store-{TRAIN_SAMPLE // 1000}k")
 
 
 def main():
@@ -46,6 +53,14 @@ def main():
     test = store[store["split"] == "test"]
     logger.info(f"Read store: {len(train):,} train / {len(test):,} test, "
                 f"{len(feature_cols)} features")
+
+    if TRAIN_SAMPLE is not None:
+        pool = len(train)
+        train = train.groupby("label", group_keys=False).apply(
+            lambda g: g.sample(int(round(TRAIN_SAMPLE * len(g) / pool)),
+                               random_state=SEED))
+        logger.info(f"Sampled {len(train):,} of {pool:,} train rows, "
+                    f"labels {train['label'].value_counts().to_dict()}")
 
     # As numpy, not DataFrames: the serving pipeline feeds arrays straight
     # out of SVD, so fitting on named columns would warn on every request.

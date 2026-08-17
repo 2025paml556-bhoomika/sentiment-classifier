@@ -178,9 +178,9 @@ so the baseline may still be the better product choice despite the lower macro F
   actually reproducing a run from the logged config.
 - **`pipeline.py` uses argparse**, against project convention. Worth replacing with a
   plain config before the tree grows.
-- **Stage 4 of `pipeline.py` overlaps the feature store, and it leaks.** It fits TF-IDF
-  on all 363,825 rows with no train/test split, so `tfidf_vectorizer.pkl` has seen the
-  test set. Nothing trains from it today, so the leak is harmless, but two feature paths
-  invite the question of which one counts. Decide whether to drop the stage.
+- **Resolved: stage 4 of `pipeline.py` removed.** It fitted TF-IDF on all 363,825 rows
+  with no train/test split, so `tfidf_vectorizer.pkl` had seen the test set. Nothing
+  ever trained from it. The pipeline now stops at the cleaned CSV; feature building
+  lives only in `tfidf/build_features.py`, which fits on the train split.
 - **Task owners are unassigned.** The source document has a "Suggested owner" blank for
   each week. Fill these in with the team.

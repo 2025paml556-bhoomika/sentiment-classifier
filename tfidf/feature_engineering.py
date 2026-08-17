@@ -9,7 +9,6 @@ The DistilBERT tokenizer equivalent lives in distilbert/tokenization.py.
 """
 
 import logging
-import pickle
 import pandas as pd
 from sklearn.feature_extraction.text import TfidfVectorizer
 
@@ -36,12 +35,6 @@ def build_tfidf_features(texts: pd.Series, max_features: int = 5000,
         logger.info("Applied existing TF-IDF vectorizer to new data")
 
     return matrix, vectorizer
-
-
-def save_tfidf_vectorizer(vectorizer: TfidfVectorizer, filepath: str):
-    with open(filepath, "wb") as f:
-        pickle.dump(vectorizer, f)
-    logger.info(f"Saved TF-IDF vectorizer to {filepath}")
 
 
 if __name__ == "__main__":
