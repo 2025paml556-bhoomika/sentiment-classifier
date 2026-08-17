@@ -3,14 +3,15 @@ Week 2 (M3) — DistilBERT fine-tuned on light-cleaned text
 -----------------------------------------------------------
 The advanced model for task 2.2, trained on the Apple GPU via MPS.
 
-Scored on the SAME test rows as every other run, taken from the feature
-store's `split` column, so task 2.4 compares models rather than splits.
+Scored on the SAME test rows as every other run, taken from the shared
+data/processed/split.parquet, so task 2.4 compares models rather than
+splits.
 
 Training uses a stratified subsample, because 8 GB of shared memory makes
 the full 291k rows impractical. The sample size is logged to MLflow.
 
 Run from the repo root:
-    ./venv/bin/python training/train_distilbert.py
+    ./venv/bin/python distilbert/train.py
 """
 
 import logging
@@ -31,7 +32,7 @@ logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(me
 logger = logging.getLogger(__name__)
 
 CLEANED_CSV = "data/processed/cleaned_reviews.csv"
-STORE_PARQUET = "feature_store/features.parquet"
+SPLIT_PARQUET = "data/processed/split.parquet"
 OUT_DIR = Path("model_store/distilbert-20k")
 EXPERIMENT = "sentiment-classifier"
 RUN_NAME = "distilbert-20k"
@@ -70,16 +71,16 @@ class ReviewDataset(Dataset):
 
 
 def load_data():
-    """Load rows and reuse the feature store's train/test split."""
+    """Load rows and reuse the shared train/test split."""
     df = pd.read_csv(CLEANED_CSV,
                      usecols=["review_text", "text_heavy_clean",
                               "text_light_clean", "label"])
-    # build_features.py read those first three columns then dropped NaNs, so
-    # this index matches the store's review_id exactly.
+    # make_split.py read review_text/text_heavy_clean/label then dropped
+    # NaNs, so this index matches the split file's review_id exactly.
     df = df.dropna(subset=["review_text", "text_heavy_clean", "label"])
     df = df.reset_index(drop=True)
 
-    split = pd.read_parquet(STORE_PARQUET, columns=["review_id", "split"])
+    split = pd.read_parquet(SPLIT_PARQUET)
     test_ids = split.loc[split["split"] == "test", "review_id"]
     train_ids = split.loc[split["split"] == "train", "review_id"]
 
@@ -149,7 +150,7 @@ def main():
                                       step=(epoch * len(train_loader)) + step)
                     running = 0.0
 
-        logger.info("evaluating on the store's test split")
+        logger.info("evaluating on the shared test split")
         ytrue, prob = evaluate(model, test_loader)
         pred = (prob > 0.5).astype(int)
 
@@ -172,7 +173,7 @@ def main():
             "batch_size": TRAIN_BATCH,
             "learning_rate": LR,
             "device": DEVICE,
-            "split_source": "feature_store/features.parquet",
+            "split_source": SPLIT_PARQUET,
             "random_state": SEED,
         })
         mlflow.log_metrics(metrics)

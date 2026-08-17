@@ -19,8 +19,13 @@ Why the transformer is fitted on the TRAIN split only: fitting it on all
 rows would leak test-set information into the features. The store keeps
 every row, with a `split` column saying which is which.
 
+The split itself is NOT created here. It comes from the shared
+data/processed/split.parquet (see data_pipeline/make_split.py), so both
+model paths score on identical rows. The store keeps a copy of the
+split column for convenience.
+
 Run from the repo root:
-    ./venv/bin/python features/build_features.py
+    ./venv/bin/python tfidf/build_features.py
 """
 
 import json
@@ -30,18 +35,17 @@ from pathlib import Path
 import pandas as pd
 from sklearn.decomposition import TruncatedSVD
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.model_selection import train_test_split
 from sklearn.pipeline import Pipeline
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 CLEANED_CSV = "data/processed/cleaned_reviews.csv"
+SPLIT_PARQUET = "data/processed/split.parquet"
 STORE_DIR = Path("feature_store")
 MAX_FEATURES = 20000
 NGRAM_RANGE = (1, 2)
 SVD_DIMS = 300
-TEST_SIZE = 0.2
 SEED = 42
 
 
@@ -59,8 +63,11 @@ def main():
     df = df.reset_index(drop=True)
     logger.info(f"Loaded {len(df):,} cleaned rows")
 
-    train_idx, test_idx = train_test_split(
-        df.index, test_size=TEST_SIZE, stratify=df["label"], random_state=SEED)
+    split = pd.read_parquet(SPLIT_PARQUET).sort_values("review_id")
+    if len(split) != len(df) or not (split["review_id"].values == df.index.values).all():
+        raise SystemExit(f"{SPLIT_PARQUET} does not line up with {CLEANED_CSV}. "
+                         "Re-run data_pipeline/make_split.py.")
+    train_idx = split.loc[split["split"] == "train", "review_id"]
 
     transformer = build_transformer()
     logger.info(f"Fitting transformer on {len(train_idx):,} train rows "
@@ -75,8 +82,7 @@ def main():
     store.insert(0, "review_id", df.index)
     store.insert(1, "label", df["label"].values)
     store.insert(2, "text_length", df["review_text"].str.split().str.len().values)
-    store.insert(3, "split", "train")
-    store.loc[test_idx, "split"] = "test"
+    store.insert(3, "split", split["split"].values)
 
     store_path = STORE_DIR / "features.parquet"
     store.to_parquet(store_path, index=False, compression="snappy")
@@ -94,8 +100,9 @@ def main():
         "tfidf_ngram_range": list(NGRAM_RANGE),
         "svd_dims": SVD_DIMS,
         "fitted_on": "train split only, to avoid test-set leakage",
+        "split_source": SPLIT_PARQUET,
         "random_state": SEED,
-        "rows": {"train": int(len(train_idx)), "test": int(len(test_idx))},
+        "rows": split["split"].value_counts().astype(int).to_dict(),
     }
     with open(STORE_DIR / "schema.json", "w") as f:
         json.dump(schema, f, indent=2)

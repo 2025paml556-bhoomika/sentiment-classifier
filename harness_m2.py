@@ -23,12 +23,13 @@ from pathlib import Path
 
 # The pipeline stages live in their own folders, so make them importable.
 ROOT = Path(__file__).parent
-sys.path[:0] = [str(ROOT / "validation"), str(ROOT / "features")]
+sys.path[:0] = [str(ROOT / "data_pipeline"), str(ROOT / "tfidf"), str(ROOT / "distilbert")]
 
 from ingestion import ingest_raw_data  # noqa: E402
 from validate_data import validate_data  # noqa: E402
 from cleaning import clean_and_label  # noqa: E402
-from feature_engineering import build_tfidf_features, build_bert_tokenized_features  # noqa: E402
+from feature_engineering import build_tfidf_features  # noqa: E402
+from tokenization import build_bert_tokenized_features  # noqa: E402
 
 RAW_CSV = "data/raw/Reviews.csv"
 TEXT_COL = "Text"

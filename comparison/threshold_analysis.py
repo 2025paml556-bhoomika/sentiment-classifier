@@ -5,14 +5,15 @@ an arbitrary default, not a property of a model. A support-ticket classifier
 should pick its threshold from the recall the business needs.
 
 This compares the two candidates across the whole precision-recall curve,
-on the feature store's 72,765 test rows, and reports precision at matched
+on the shared split's 72,765 test rows, and reports precision at matched
 recall. Probabilities are cached, so the sweep can be re-run cheaply.
 
 Run from the repo root:
-    ./venv/bin/python training/threshold_analysis.py
+    ./venv/bin/python comparison/threshold_analysis.py
 """
 
 import logging
+import sys
 from pathlib import Path
 
 import numpy as np
@@ -24,13 +25,14 @@ from sklearn.pipeline import Pipeline
 from torch.utils.data import DataLoader
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-from train_distilbert import ReviewDataset
+sys.path.insert(0, str(Path(__file__).parent.parent / "distilbert"))
+from train import ReviewDataset  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 CLEANED_CSV = "data/processed/cleaned_reviews.csv"
-STORE_PARQUET = "feature_store/features.parquet"
+SPLIT_PARQUET = "data/processed/split.parquet"
 BERT_DIR = Path("model_store/distilbert-50k")
 CACHE = Path("/tmp/threshold_cache")
 
@@ -50,7 +52,7 @@ def load_data():
     df = df.dropna(subset=["review_text", "text_heavy_clean", "label"])
     df = df.reset_index(drop=True)
 
-    split = pd.read_parquet(STORE_PARQUET, columns=["review_id", "split"])
+    split = pd.read_parquet(SPLIT_PARQUET)
     test = df.loc[split.loc[split["split"] == "test", "review_id"]]
     train = df.loc[split.loc[split["split"] == "train", "review_id"]]
     logger.info(f"train {len(train):,}   test {len(test):,}")

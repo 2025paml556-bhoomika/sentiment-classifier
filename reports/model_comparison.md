@@ -17,11 +17,12 @@ Task 2.4. Seven runs, all logged to MLflow (`sqlite:///mlflow.db`).
 ## How we kept the comparison fair
 
 Every model is scored on the **same 72,765 test rows**. We read the rows from the
-feature store's `split` column. We do not split the data again per model. Without
-this, each model would face a different test set. The numbers could not be compared.
+shared split file, `data/processed/split.parquet`. We do not split the data again
+per model. Without this, each model would face a different test set. The numbers
+could not be compared.
 
-We checked this holds. Both `training.py` and `build_features.py` produce exactly
-the same test rows as the feature store.
+We checked this holds. Both `tfidf/train_baselines.py` and `tfidf/build_features.py`
+produce exactly the same test rows.
 
 The test set holds **11,413 real negative reviews**, or 15.7% of the total. This
 imbalance is why macro F1 leads the table instead of accuracy. A model that always
@@ -71,7 +72,7 @@ the model type and the amount of data.
 
 We fixed this. We drew one sample of 50,000 rows and trained both models on it.
 The sample comes from the train split only, so no test rows leak in. See
-`training/train_controlled_50k.py`.
+`comparison/train_controlled_50k.py`.
 
 | Comparison | Gap in macro F1 |
 |---|---|
@@ -131,7 +132,7 @@ property of a model. A support-ticket classifier should pick its threshold from 
 recall the business needs.
 
 So we compared the two best candidates at matched recall. See
-`training/threshold_analysis.py`.
+`comparison/threshold_analysis.py`.
 
 | Target recall | LogReg precision | DistilBERT precision | LogReg false alarms | DistilBERT false alarms |
 |---|---|---|---|---|

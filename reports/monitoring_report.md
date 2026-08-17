@@ -67,7 +67,7 @@ evidence that these thresholds are usable.
 2. Have them labelled by hand. They are the examples the current model finds hardest.
 3. Add them to `data/processed/cleaned_reviews.csv` and rebuild the feature store, so
    training and serving features stay in step.
-4. Re-run `training/train_distilbert.py`, then compare against the current model in MLflow
+4. Re-run `distilbert/train.py`, then compare against the current model in MLflow
    on the same held-out test split.
 5. Promote the new model only if macro F1 improves. Keep the previous weights in
    `model_store/` so a rollback is possible.

@@ -26,17 +26,20 @@ The project follows the reference folder structure. There is no `src/` directory
 ```
 pipeline.py                           end-to-end Week 1 run, writes artifacts
 harness_m2.py                         same stages, prints input/output, writes nothing
-validation/ingestion.py               load raw CSV, rename columns
-validation/validate_data.py           quality checks, halts on critical failure
-features/cleaning.py                  heavy_clean (TF-IDF) + light_clean (DistilBERT)
-features/feature_engineering.py       TF-IDF builder, DistilBERT tokenizer
-features/build_features.py            builds the feature store
-training/training.py                  baseline models from cleaned CSV
-training/train_model_from_store.py    model trained from the feature store
-training/train_distilbert.py          DistilBERT fine-tune on the Apple GPU
+data_pipeline/ingestion.py            load raw CSV, rename columns
+data_pipeline/validate_data.py        quality checks, halts on critical failure
+data_pipeline/cleaning.py             heavy_clean (TF-IDF) + light_clean (DistilBERT)
+data_pipeline/make_split.py           writes the shared train/test split
+tfidf/feature_engineering.py          TF-IDF builder
+tfidf/build_features.py               builds the feature store
+tfidf/train_baselines.py              baseline models from cleaned CSV
+tfidf/train_from_store.py             model trained from the feature store
+distilbert/tokenization.py            DistilBERT tokenizer
+distilbert/train.py                   DistilBERT fine-tune on the Apple GPU
+comparison/                           cross-model scripts that need both paths
 feature_store/                        features.parquet, transformer.pkl, schema.json
 model_store/distilbert-20k/           fine-tuned weights, 256 MB, DVC-tracked
-serving/  ui/                         placeholders, not yet written
+serving/  ui/                         prediction API and browser test page
 reports/validation_report.md          the 1.10 write-up
 ```
 
@@ -68,9 +71,9 @@ supersede the raw figures in `data/processed/validation_report.json`.
 ## Week 1 (M2) — Data ingestion, validation & feature pipeline
 
 - [x] **1.1 Select dataset.** Amazon Fine Food Reviews, 568,454 rows at `data/raw/Reviews.csv`. The `Text` and `Score` columns match what the code expects. Still needs registering in the group spreadsheet.
-- [x] **1.2 Data ingestion.** `validation/ingestion.py` loads raw CSV into a DataFrame and logs row counts. Scripted, no manual steps.
-- [x] **1.3 Data validation.** `validation/validate_data.py` checks nulls, duplicates, empty text, rating range, class balance, and review-length distribution. Raises `DataValidationError` on critical failures, which halts the pipeline.
-- [x] **1.4 Label creation.** `label_sentiment()` in `features/cleaning.py` drops 3-star rows and maps rating >= 4 to 1 (Positive), <= 2 to 0 (Negative).
+- [x] **1.2 Data ingestion.** `data_pipeline/ingestion.py` loads raw CSV into a DataFrame and logs row counts. Scripted, no manual steps.
+- [x] **1.3 Data validation.** `data_pipeline/validate_data.py` checks nulls, duplicates, empty text, rating range, class balance, and review-length distribution. Raises `DataValidationError` on critical failures, which halts the pipeline.
+- [x] **1.4 Label creation.** `label_sentiment()` in `data_pipeline/cleaning.py` drops 3-star rows and maps rating >= 4 to 1 (Positive), <= 2 to 0 (Negative).
 - [x] **1.5 Text cleaning, two versions.** `heavy_clean()` removes stopwords for TF-IDF; `light_clean()` keeps sentence structure for DistilBERT.
 - [x] **1.6 Feature pipeline A.** `build_tfidf_features()` fits or reuses a TF-IDF vectorizer. Accepts an existing vectorizer so Week 4 retraining reuses the same vocabulary.
 - [x] **1.7 Feature pipeline B.** `build_bert_tokenized_features()` returns `input_ids` and `attention_mask` for DistilBERT.
@@ -80,18 +83,19 @@ supersede the raw figures in `data/processed/validation_report.json`.
 
 ## Feature store (added requirement)
 
-Built by `features/build_features.py`. Not part of `pipeline.py`, which never touches it.
+Built by `tfidf/build_features.py`. Not part of `pipeline.py`, which never touches it.
 
 - Input is `data/processed/cleaned_reviews.csv`.
 - TF-IDF with 20,000 features and unigrams plus bigrams, then TruncatedSVD to 300 dense dimensions.
 - The transformer is **fitted on the 291,060 train rows only**, then applied to all 363,825 rows. Fitting on everything would bake test-set word statistics into every feature value. Transforming all rows is safe, because it only applies rules already learned.
 - Output: `features.parquet` (581 MB, fixed 300-column schema), `transformer.pkl` (47 MB, reused at serving time), `schema.json` (what the columns mean).
-- Split is recorded in a `split` column, 291,060 train and 72,765 test.
+- Split is recorded in a `split` column, 291,060 train and 72,765 test, copied
+  from the shared `data/processed/split.parquet` (built by `data_pipeline/make_split.py`).
 
 Rebuild it with:
 
 ```bash
-venv/bin/python features/build_features.py
+venv/bin/python tfidf/build_features.py
 ```
 
 The store's purpose is consistency: serving reuses the saved transformer, so training
@@ -118,9 +122,9 @@ missing an unhappy customer usually costs more than a false alarm a human can di
 so the baseline may still be the better product choice despite the lower macro F1.
 
 - [x] **2.0 Handle class imbalance.** The cleaned set is about 84% positive, a 5.4-to-1 split. A model that always predicts Positive would score about 84% accuracy while being useless. Both Logistic Regression trainers use `class_weight="balanced"` and every run reports macro F1 rather than accuracy. **Not yet applied to DistilBERT**, which trains on plain cross-entropy with the natural class ratio. That is the likely cause of its weak negative recall, so weighting the loss is the obvious next experiment.
-- [x] **2.1 Baseline model.** Logistic Regression on TF-IDF, in unigram (5k) and bigram (20k) variants, via `training/training.py`. The bigram run wins by 0.038 macro F1, though both bigrams and the larger vocabulary contribute, so the credit is shared.
-- [x] **2.2 Advanced model.** DistilBERT fine-tuned via `training/train_distilbert.py`, on the Apple GPU through MPS. No Colab needed. One epoch, 20,000-row stratified subsample, batch 16, `max_length` 128, about 15 minutes. Loss fell from 0.38 to 0.15. Weights are in `model_store/distilbert-20k`, DVC-tracked because `model.safetensors` is 256 MB and GitHub rejects anything over 100 MB.
-- [x] **2.3 Experiment tracking.** Parameters, metrics, and a classification report logged for every run. `train_model_from_store.py` also logs a combined transformer-plus-classifier pipeline, so a served sklearn model carries its own feature logic.
+- [x] **2.1 Baseline model.** Logistic Regression on TF-IDF, in unigram (5k) and bigram (20k) variants, via `tfidf/train_baselines.py`. The bigram run wins by 0.038 macro F1, though both bigrams and the larger vocabulary contribute, so the credit is shared.
+- [x] **2.2 Advanced model.** DistilBERT fine-tuned via `distilbert/train.py`, on the Apple GPU through MPS. No Colab needed. One epoch, 20,000-row stratified subsample, batch 16, `max_length` 128, about 15 minutes. Loss fell from 0.38 to 0.15. Weights are in `model_store/distilbert-20k`, DVC-tracked because `model.safetensors` is 256 MB and GitHub rejects anything over 100 MB.
+- [x] **2.3 Experiment tracking.** Parameters, metrics, and a classification report logged for every run. `tfidf/train_from_store.py` also logs a combined transformer-plus-classifier pipeline, so a served sklearn model carries its own feature logic.
 - [x] **2.4 Model comparison.** Written up in `reports/model_comparison.md`. All four models on the same 72,765 test rows, with accuracy, macro F1, ROC AUC, and negative-class precision, recall and F1. DistilBERT wins every aggregate score on fourteen times less training data, thanks to pretraining and reading word order. The report converts precision and recall into review counts, which is the useful part: DistilBERT misses 1,673 more real complaints than the bigram baseline, while the baseline raises 3,188 more false alarms. So the better model depends on the cost of each error, not on macro F1. Caveats are stated: unequal training data, one epoch, no class weighting on DistilBERT, and a single split.
 - [ ] **2.5 Reproducibility check.** A teammate must reproduce the winning run from the logged config alone. Blocked on pinning versions, see open items.
 

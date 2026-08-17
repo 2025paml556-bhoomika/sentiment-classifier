@@ -22,51 +22,65 @@ as neutral.
 flowchart TD
     RAW["data/raw/Reviews.csv<br/>568,454 rows, 287 MB<br/>DVC-tracked"]
 
-    RAW --> ING["validation/ingestion.py<br/>load, rename columns"]
-    ING --> VAL{"validation/validate_data.py<br/>nulls, duplicates, rating range"}
+    RAW --> ING["data_pipeline/ingestion.py<br/>load, rename columns"]
+    ING --> VAL{"data_pipeline/validate_data.py<br/>nulls, duplicates, rating range"}
     VAL -->|critical rule fails| HALT["pipeline halts<br/>DataValidationError"]
-    VAL -->|passes| CLEAN["features/cleaning.py<br/>drop duplicates and 3-star rows"]
+    VAL -->|passes| CLEAN["data_pipeline/cleaning.py<br/>drop duplicates and 3-star rows"]
 
     CLEAN --> CSV["data/processed/cleaned_reviews.csv<br/>363,825 rows, DVC-tracked"]
+
+    CSV --> SPLIT["data_pipeline/make_split.py<br/>data/processed/split.parquet<br/>shared train/test assignment"]
 
     CSV --> HEAVY["heavy_clean<br/>stopwords removed"]
     CSV --> LIGHT["light_clean<br/>sentence structure kept"]
 
-    HEAVY --> STORE["features/build_features.py<br/>TF-IDF 20k bigrams to SVD 300 dims<br/>fitted on train split only"]
-    HEAVY --> BASE["training/training.py<br/>TF-IDF direct, 5k and 20k"]
-    LIGHT --> BERT["training/train_distilbert.py<br/>fine-tune on the Apple GPU"]
+    HEAVY --> STORE["tfidf/build_features.py<br/>TF-IDF 20k bigrams to SVD 300 dims<br/>fitted on train split only"]
+    HEAVY --> BASE["tfidf/train_baselines.py<br/>TF-IDF direct, 5k and 20k"]
+    LIGHT --> BERT["distilbert/train.py<br/>fine-tune on the Apple GPU"]
 
     STORE --> FS[("feature_store/<br/>features.parquet 581 MB<br/>transformer.pkl 47 MB<br/>schema.json")]
 
-    FS --> TRAIN2["training/train_model_from_store.py"]
+    FS --> TRAIN2["tfidf/train_from_store.py"]
     BASE --> MLF[("MLflow<br/>mlflow.db<br/>params, metrics, models")]
     TRAIN2 --> MLF
     BERT --> MLF
-    FS -.->|test split reused, so runs compare| BERT
+    SPLIT -.->|same test rows, so runs compare| BASE
+    SPLIT -.->|same test rows, so runs compare| BERT
+    SPLIT -.-> STORE
 
     BERT --> MS[("model_store/distilbert-20k<br/>256 MB, DVC-tracked")]
     MS --> SERVE["serving/api.py<br/>FastAPI on CPU<br/>POST /predict"]
     LIGHT -.->|same light_clean at serving| SERVE
 ```
 
-Two feature paths exist on purpose. `training/training.py` uses TF-IDF directly and
+Two feature paths exist on purpose. `tfidf/train_baselines.py` uses TF-IDF directly and
 scores higher. The feature store trades some accuracy for guaranteed consistency
 between training and serving. See [design decisions](#design-decisions).
 
 ## Repo layout
 
+The folders follow the seam between the two model families. `data_pipeline/` is
+shared, `tfidf/` and `distilbert/` never import from each other, and
+`comparison/` holds the scripts that deliberately need both.
+
 ```
 pipeline.py                          run Week 1 end to end, writes artifacts
 harness_m2.py                        same stages, prints input/output, writes nothing
-validation/ingestion.py              load raw CSV, rename columns
-validation/validate_data.py          quality checks, halts on critical failure
-features/cleaning.py                 heavy_clean and light_clean
-features/feature_engineering.py      TF-IDF builder, DistilBERT tokenizer
-features/build_features.py           builds the feature store
-training/training.py                 baseline models from the cleaned CSV
-training/train_model_from_store.py   model trained from the feature store
+data_pipeline/ingestion.py           load raw CSV, rename columns
+data_pipeline/validate_data.py       quality checks, halts on critical failure
+data_pipeline/cleaning.py            heavy_clean and light_clean
+data_pipeline/make_split.py          shared train/test split, one file both paths read
+tfidf/feature_engineering.py         TF-IDF builder
+tfidf/build_features.py              builds the feature store
+tfidf/train_baselines.py             baseline models from the cleaned CSV
+tfidf/train_from_store.py            model trained from the feature store
+distilbert/tokenization.py           DistilBERT tokenizer
+distilbert/train.py                  DistilBERT fine-tune
+comparison/train_controlled_50k.py   both models on one identical 50k sample
+comparison/threshold_analysis.py     precision at matched recall, both models
 feature_store/                       features.parquet, transformer.pkl, schema.json
-model_store/  serving/  ui/          placeholders, not yet written
+model_store/                         DistilBERT weights, DVC-tracked
+serving/  ui/                        prediction API and browser test page
 reports/validation_report.md         data validation write-up
 plan.md                              task tracking and open items
 ```
@@ -109,30 +123,38 @@ and `tfidf_vectorizer.pkl` into `data/processed/`.
 venv/bin/python pipeline.py --input data/raw/Reviews.csv --text-col Text --rating-col Score
 ```
 
-**Build the feature store.** Reads the cleaned CSV, writes `feature_store/`.
+**Create the shared train/test split.** One file both model paths read, so every
+run is scored on the same test rows.
 
 ```bash
-venv/bin/python features/build_features.py
+venv/bin/python data_pipeline/make_split.py
+```
+
+**Build the feature store.** Reads the cleaned CSV and the shared split,
+writes `feature_store/`.
+
+```bash
+venv/bin/python tfidf/build_features.py
 ```
 
 **Train the baseline models.** Two TF-IDF variants, logged to MLflow.
 
 ```bash
-venv/bin/python training/training.py
+venv/bin/python tfidf/train_baselines.py
 ```
 
 **Train from the feature store.** Logs a combined transformer-plus-classifier model,
 so anything served carries its own feature logic.
 
 ```bash
-venv/bin/python training/train_model_from_store.py
+venv/bin/python tfidf/train_from_store.py
 ```
 
 **Fine-tune DistilBERT.** Uses the Apple GPU through MPS, about 15 minutes for one
 epoch on a 20,000-row sample. Saves weights to `model_store/distilbert-20k`.
 
 ```bash
-venv/bin/python training/train_distilbert.py
+venv/bin/python distilbert/train.py
 ```
 
 **View the experiments.**
@@ -285,6 +307,7 @@ holding an md5 and a byte size.
 | `data/processed/cleaned_reviews.csv` | 416 MB |
 | `feature_store/features.parquet` | 581 MB |
 | `feature_store/transformer.pkl` | 47 MB |
+| `data/processed/split.parquet` | small, run `dvc add` after `make_split.py` |
 
 `schema.json` stays in git instead, because it is small text and readable diffs are
 useful there.

@@ -2,8 +2,9 @@
 Train from the feature store
 ------------------------------
 Reads features from feature_store/features.parquet and never recomputes
-them. The train/test split also comes from the store, so every model
-trained this way is scored on identical rows.
+them. The store's `split` column is a copy of the shared
+data/processed/split.parquet, so this run is scored on the same test
+rows as every other model.
 
 Saves two things to MLflow:
   - the classifier, which expects the store's 300 columns
@@ -12,7 +13,7 @@ Saves two things to MLflow:
     features from training
 
 Run from the repo root:
-    ./venv/bin/python training/train_model_from_store.py
+    ./venv/bin/python tfidf/train_from_store.py
 """
 
 import json

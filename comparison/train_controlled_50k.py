@@ -3,7 +3,7 @@
 The existing runs are confounded. distilbert-20k trained on 20,000 rows and
 the baselines on 291,060, so the comparison mixes architecture with training
 size. Here both models see one identical 50,000-row sample, drawn from the
-feature store's train split and evaluated on its 72,765 test rows.
+shared train split and evaluated on its 72,765 test rows.
 
 Two Logistic Regression variants run, with and without class weighting,
 because DistilBERT uses plain cross-entropy. That isolates weighting from
@@ -13,10 +13,11 @@ Text differs by design: DistilBERT reads text_light_clean (keeps sentence
 structure), LogReg reads text_heavy_clean (stopwords removed).
 
 Run from the repo root:
-    ./venv/bin/python training/train_controlled_50k.py
+    ./venv/bin/python comparison/train_controlled_50k.py
 """
 
 import logging
+import sys
 import time
 from pathlib import Path
 
@@ -32,13 +33,14 @@ from sklearn.pipeline import Pipeline
 from torch.utils.data import DataLoader
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
-from train_distilbert import ReviewDataset, evaluate
+sys.path.insert(0, str(Path(__file__).parent.parent / "distilbert"))
+from train import ReviewDataset, evaluate  # noqa: E402
 
 logging.basicConfig(level=logging.INFO, format="%(asctime)s [%(levelname)s] %(message)s")
 logger = logging.getLogger(__name__)
 
 CLEANED_CSV = "data/processed/cleaned_reviews.csv"
-STORE_PARQUET = "feature_store/features.parquet"
+SPLIT_PARQUET = "data/processed/split.parquet"
 TRACKING_URI = "sqlite:///mlflow.db"
 EXPERIMENT = "sentiment-classifier"
 OUT_DIR = Path("model_store/distilbert-50k")
@@ -70,14 +72,14 @@ def scores(ytrue, pred, prob):
 
 
 def load_data():
-    """One stratified sample, shared by both models, from the store's train split."""
+    """One stratified sample, shared by both models, from the shared train split."""
     df = pd.read_csv(CLEANED_CSV,
                      usecols=["review_text", "text_heavy_clean",
                               "text_light_clean", "label"])
     df = df.dropna(subset=["review_text", "text_heavy_clean", "label"])
     df = df.reset_index(drop=True)
 
-    split = pd.read_parquet(STORE_PARQUET, columns=["review_id", "split"])
+    split = pd.read_parquet(SPLIT_PARQUET)
     test = df.loc[split.loc[split["split"] == "test", "review_id"]]
     pool = df.loc[split.loc[split["split"] == "train", "review_id"]]
 
@@ -112,7 +114,7 @@ def run_logreg(name, class_weight, train_df, test_df):
             "solver": "liblinear",
             "train_rows": len(train_df),
             "test_rows": len(test_df),
-            "split_source": STORE_PARQUET,
+            "split_source": SPLIT_PARQUET,
             "random_state": SEED,
         })
         mlflow.log_metrics(metrics)
@@ -160,7 +162,7 @@ def run_distilbert(name, train_df, test_df):
                                       step=(epoch * len(train_loader)) + step)
                     running = 0.0
 
-        logger.info("evaluating on the store's test split")
+        logger.info("evaluating on the shared test split")
         ytrue, prob = evaluate(model, test_loader)
         pred = (prob > 0.5).astype(int)
         metrics = scores(ytrue, pred, prob)
@@ -176,7 +178,7 @@ def run_distilbert(name, train_df, test_df):
             "learning_rate": LR,
             "class_weight": "none",
             "device": DEVICE,
-            "split_source": STORE_PARQUET,
+            "split_source": SPLIT_PARQUET,
             "random_state": SEED,
         })
         mlflow.log_metrics(metrics)

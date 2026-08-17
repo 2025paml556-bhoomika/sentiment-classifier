@@ -22,7 +22,7 @@ RUN pip install --no-cache-dir \
 
 # Only what the API needs at runtime.
 COPY serving/ ./serving/
-COPY features/cleaning.py ./features/cleaning.py
+COPY data_pipeline/cleaning.py ./data_pipeline/cleaning.py
 COPY ui/index.html ./ui/index.html
 COPY model_store/distilbert-50k/ ./model_store/distilbert-50k/
 

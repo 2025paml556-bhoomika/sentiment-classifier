@@ -37,7 +37,7 @@ from pydantic import BaseModel, Field, field_validator
 from transformers import AutoModelForSequenceClassification, AutoTokenizer
 
 ROOT = Path(__file__).parent.parent
-sys.path.insert(0, str(ROOT / "features"))
+sys.path.insert(0, str(ROOT / "data_pipeline"))
 
 from cleaning import light_clean  # noqa: E402
 

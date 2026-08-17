@@ -1,7 +1,7 @@
 # Only what the API imports. The root requirements.txt also carries mlflow,
 # dvc, scikit-learn and pyarrow, which serving never touches.
 #
-# pandas is here only because features/cleaning.py imports it at module level.
+# pandas is here only because data_pipeline/cleaning.py imports it at module level.
 # light_clean() itself does not use it.
 #
 # This file targets the Linux container, not macOS. The +cpu build of torch

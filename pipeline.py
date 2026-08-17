@@ -21,7 +21,7 @@ from pathlib import Path
 
 # The pipeline stages live in their own folders, so make them importable.
 ROOT = Path(__file__).parent
-sys.path[:0] = [str(ROOT / "validation"), str(ROOT / "features")]
+sys.path[:0] = [str(ROOT / "data_pipeline"), str(ROOT / "tfidf")]
 
 from ingestion import ingest_raw_data  # noqa: E402
 from validate_data import validate_data, DataValidationError  # noqa: E402
