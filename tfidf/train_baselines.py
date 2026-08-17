@@ -34,10 +34,16 @@ SPLIT_PARQUET = "data/processed/split.parquet"
 EXPERIMENT = "sentiment-classifier"
 SEED = 42
 
-# One MLflow run per entry.
+# One MLflow run per entry: "tfidf" holds TfidfVectorizer kwargs, "C" the
+# LogisticRegression regularization strength (default 1.0).
+#
+# The one-knob ablation runs (sublinear, 50k, trigram, C4) are logged in
+# MLflow. This combines the two winners that did not hurt negative recall:
+# the 50k vocabulary and sublinear_tf. C stays 1.0 because C=4 traded
+# negative recall away.
 CONFIGS = [
-    {"name": "logreg-tfidf-unigram", "max_features": 5000, "ngram_range": (1, 1)},
-    {"name": "logreg-tfidf-bigram", "max_features": 20000, "ngram_range": (1, 2)},
+    {"name": "logreg-tfidf-50k-sublinear",
+     "tfidf": {"max_features": 50000, "ngram_range": (1, 2), "sublinear_tf": True}},
 ]
 
 
@@ -57,9 +63,9 @@ def load_split():
 def train_one(cfg, Xtr, Xte, ytr, yte):
     with mlflow.start_run(run_name=cfg["name"]):
         model = Pipeline([
-            ("tfidf", TfidfVectorizer(max_features=cfg["max_features"],
-                                      ngram_range=cfg["ngram_range"])),
-            ("clf", LogisticRegression(class_weight="balanced", solver="liblinear")),
+            ("tfidf", TfidfVectorizer(**cfg["tfidf"])),
+            ("clf", LogisticRegression(class_weight="balanced", solver="liblinear",
+                                       C=cfg.get("C", 1.0))),
         ])
         model.fit(Xtr, ytr)
         pred = model.predict(Xte)
@@ -78,8 +84,8 @@ def train_one(cfg, Xtr, Xte, ytr, yte):
         mlflow.log_params({
             "model": "LogisticRegression",
             "features": "tfidf",
-            "max_features": cfg["max_features"],
-            "ngram_range": str(cfg["ngram_range"]),
+            **{k: str(v) for k, v in cfg["tfidf"].items()},
+            "C": cfg.get("C", 1.0),
             "class_weight": "balanced",
             "solver": "liblinear",
             "split_source": SPLIT_PARQUET,

@@ -86,9 +86,9 @@ supersede the raw figures in `data/processed/validation_report.json`.
 Built by `tfidf/build_features.py`. Not part of `pipeline.py`, which never touches it.
 
 - Input is `data/processed/cleaned_reviews.csv`.
-- TF-IDF with 20,000 features and unigrams plus bigrams, then TruncatedSVD to 300 dense dimensions.
+- TF-IDF with 20,000 features, unigrams plus bigrams and sublinear term counts, then TruncatedSVD to 600 dense dimensions. Chosen by one-knob ablation, see the `logreg-store-*` MLflow runs.
 - The transformer is **fitted on the 291,060 train rows only**, then applied to all 363,825 rows. Fitting on everything would bake test-set word statistics into every feature value. Transforming all rows is safe, because it only applies rules already learned.
-- Output: `features.parquet` (581 MB, fixed 300-column schema), `transformer.pkl` (47 MB, reused at serving time), `schema.json` (what the columns mean).
+- Output: `features.parquet` (1.2 GB, fixed 600-column schema), `transformer.pkl` (97 MB, reused at serving time), `schema.json` (what the columns mean).
 - Split is recorded in a `split` column, 291,060 train and 72,765 test, copied
   from the shared `data/processed/split.parquet` (built by `data_pipeline/make_split.py`).
 
@@ -160,16 +160,15 @@ so the baseline may still be the better product choice despite the lower macro F
 
 - **No README.** The repo has none at all. This is a 20% rubric criterion and the
   largest single scoring gap. It needs setup instructions and an architecture diagram.
-- **The feature store model is the weakest.** Macro F1 of 0.7878 against 0.8729 for
-  plain bigram TF-IDF, so the store costs 0.085 macro F1. This is expected, because
-  compressing 20,000 features into 300 loses information. The docstring in
-  `build_features.py` cites "+0.063 macro F1" for SVD, but that compares SVD against
-  picking the top 300 TF-IDF terms, not against the full 20,000. Reword it, and state
-  the trade-off in the report: the store buys training-serving consistency and pays in
-  accuracy. Otherwise a reviewer reading the MLflow runs will ask why the weakest model
-  is the one wired for serving.
-- **Three duplicate MLflow runs.** `logreg-feature-store-svd300` is logged three times
-  with identical metrics. Delete two before presenting the comparison.
+- **Partly resolved: the feature store model was the weakest.** It scored 0.7878 macro
+  F1 against 0.8729 for plain bigram TF-IDF, because compressing 20,000 features into
+  300 loses information. A one-knob ablation (the `logreg-store-*` MLflow runs) led to
+  a rebuild with SVD 600 and sublinear TF, which recovers about a third of the gap.
+  The misleading "+0.063 macro F1" docstring in `build_features.py` was also reworded.
+  Still open: state the trade-off in `reports/model_comparison.md`, which predates the
+  rebuild and the new `logreg-tfidf-*` ablation runs.
+- **Resolved: duplicate MLflow runs deleted.** `logreg-feature-store-svd300` was logged
+  three times with identical metrics; the two older copies are soft-deleted, one remains.
 - **No DVC remote.** Nothing is configured, so evaluators cannot run `dvc pull`. The
   cache is local only. Artifact 1 expects the dataset to be reachable.
 - **Environment now pinned.** `requirements.txt` holds exact `==` versions, and the

@@ -7,7 +7,7 @@ data/processed/split.parquet, so this run is scored on the same test
 rows as every other model.
 
 Saves two things to MLflow:
-  - the classifier, which expects the store's 300 columns
+  - the classifier, which expects the store's feature columns
   - a serving pipeline (transformer + classifier) that maps raw cleaned
     text straight to a prediction, so serving cannot use different
     features from training
@@ -35,13 +35,15 @@ STORE_DIR = Path("feature_store")
 EXPERIMENT = "sentiment-classifier"
 SEED = 42
 
-# None trains on the full train split (the original logreg-feature-store-svd300
-# run). A number draws a stratified sample of that size, same seed and ratios
-# as comparison/train_controlled_50k.py, so runs stay comparable.
-TRAIN_SAMPLE = 50_000
+# None trains on the full train split. A number draws a stratified sample of
+# that size, same seed and ratios as comparison/train_controlled_50k.py, so
+# runs stay comparable.
+TRAIN_SAMPLE = None
 
-RUN_NAME = ("logreg-feature-store-svd300" if TRAIN_SAMPLE is None
-            else f"logreg-feature-store-{TRAIN_SAMPLE // 1000}k")
+# The store config this name reflects: TF-IDF 20k sublinear -> SVD 600.
+# The SVD-300 era runs (logreg-feature-store-svd300, -50k) stay in MLflow.
+RUN_NAME = ("logreg-feature-store-svd600" if TRAIN_SAMPLE is None
+            else f"logreg-feature-store-svd600-{TRAIN_SAMPLE // 1000}k")
 
 
 def main():

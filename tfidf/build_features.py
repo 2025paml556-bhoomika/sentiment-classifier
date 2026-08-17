@@ -6,14 +6,17 @@ Training reads from the store and never recomputes. Serving reuses the
 saved transformer, so training and serving cannot disagree.
 
     cleaned_reviews.csv
-        -> TF-IDF (20k, unigram+bigram) -> TruncatedSVD (300 dense dims)
-        -> feature_store/features.parquet   (fixed 300-column schema)
+        -> TF-IDF (20k, unigram+bigram, sublinear) -> TruncatedSVD (600 dims)
+        -> feature_store/features.parquet   (fixed 600-column schema)
         -> feature_store/transformer.pkl    (fitted, for serving)
         -> feature_store/schema.json        (what the columns are)
 
 Why SVD instead of picking the top N TF-IDF terms: SVD compresses all
-20,000 features into 300 combinations rather than discarding 19,700 of
-them. Measured on this dataset, that is worth +0.063 macro F1.
+20,000 features into combinations rather than discarding most of them.
+Config chosen by one-knob ablation (see MLflow logreg-store-* runs):
+going 300 -> 600 dims was worth +0.0255 macro F1 and sublinear_tf
+another +0.0078. Compression still costs accuracy against inline
+TF-IDF; that is the price of the store's training-serving consistency.
 
 Why the transformer is fitted on the TRAIN split only: fitting it on all
 rows would leak test-set information into the features. The store keeps
@@ -45,13 +48,14 @@ SPLIT_PARQUET = "data/processed/split.parquet"
 STORE_DIR = Path("feature_store")
 MAX_FEATURES = 20000
 NGRAM_RANGE = (1, 2)
-SVD_DIMS = 300
+SVD_DIMS = 600
 SEED = 42
 
 
 def build_transformer():
     return Pipeline([
-        ("tfidf", TfidfVectorizer(max_features=MAX_FEATURES, ngram_range=NGRAM_RANGE)),
+        ("tfidf", TfidfVectorizer(max_features=MAX_FEATURES, ngram_range=NGRAM_RANGE,
+                                  sublinear_tf=True)),
         ("svd", TruncatedSVD(n_components=SVD_DIMS, random_state=SEED)),
     ])
 
@@ -98,6 +102,7 @@ def main():
         "metadata_columns": ["review_id", "label", "text_length", "split"],
         "tfidf_max_features": MAX_FEATURES,
         "tfidf_ngram_range": list(NGRAM_RANGE),
+        "tfidf_sublinear_tf": True,
         "svd_dims": SVD_DIMS,
         "fitted_on": "train split only, to avoid test-set leakage",
         "split_source": SPLIT_PARQUET,

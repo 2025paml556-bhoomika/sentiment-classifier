@@ -34,11 +34,11 @@ flowchart TD
     CSV --> HEAVY["heavy_clean<br/>stopwords removed"]
     CSV --> LIGHT["light_clean<br/>sentence structure kept"]
 
-    HEAVY --> STORE["tfidf/build_features.py<br/>TF-IDF 20k bigrams to SVD 300 dims<br/>fitted on train split only"]
+    HEAVY --> STORE["tfidf/build_features.py<br/>TF-IDF 20k bigrams, sublinear, to SVD 600 dims<br/>fitted on train split only"]
     HEAVY --> BASE["tfidf/train_baselines.py<br/>TF-IDF direct, 5k and 20k"]
     LIGHT --> BERT["distilbert/train.py<br/>fine-tune on the Apple GPU"]
 
-    STORE --> FS[("feature_store/<br/>features.parquet 581 MB<br/>transformer.pkl 47 MB<br/>schema.json")]
+    STORE --> FS[("feature_store/<br/>features.parquet 1.2 GB<br/>transformer.pkl 97 MB<br/>schema.json")]
 
     FS --> TRAIN2["tfidf/train_from_store.py"]
     BASE --> MLF[("MLflow<br/>mlflow.db<br/>params, metrics, models")]
@@ -286,12 +286,12 @@ all rows afterwards is safe, since it only applies rules already learned. The st
 every row with a `split` column, 291,060 train and 72,765 test.
 
 **The feature store trades accuracy for consistency.** Compressing 20,000 TF-IDF features
-into 300 SVD dimensions costs 0.085 Macro F1 against using TF-IDF directly. What it buys
-is a fixed 300-column schema and one saved transformer shared by training and serving, so
-the two cannot compute features differently. That failure, training-serving skew, is hard
-to detect because both sides look correct in isolation. SVD is still the right way to
-reach 300 columns: it compresses all 20,000 features into combinations rather than
-discarding 19,700 of them, worth 0.063 Macro F1 over keeping only the top 300 terms.
+into SVD dimensions costs Macro F1 against using TF-IDF directly. What it buys is a
+fixed-column schema and one saved transformer shared by training and serving, so the two
+cannot compute features differently. That failure, training-serving skew, is hard to
+detect because both sides look correct in isolation. The store's config was tuned by a
+one-knob ablation (the `logreg-store-*` MLflow runs): 600 dims and `sublinear_tf` cut
+the compression cost from 0.085 to about 0.06 Macro F1 versus the best inline model.
 
 **Validation can halt the pipeline.** Critical rule failures raise `DataValidationError`
 and stop the run, rather than letting bad data reach a model quietly.
@@ -305,8 +305,8 @@ holding an md5 and a byte size.
 |---|---|
 | `data/raw/Reviews.csv` | 287 MB |
 | `data/processed/cleaned_reviews.csv` | 416 MB |
-| `feature_store/features.parquet` | 581 MB |
-| `feature_store/transformer.pkl` | 47 MB |
+| `feature_store/features.parquet` | 1.2 GB |
+| `feature_store/transformer.pkl` | 97 MB |
 | `data/processed/split.parquet` | small, run `dvc add` after `make_split.py` |
 
 `schema.json` stays in git instead, because it is small text and readable diffs are
